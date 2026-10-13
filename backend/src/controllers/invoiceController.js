@@ -144,6 +144,19 @@ async function generateInvoice(req, res) {
     doc.setTextColor(211, 84, 0);
     doc.text(`Rs. ${finalAmount.toFixed(2)}`, 170, yPos + 2);
 
+    // Next Service Recommendation Box in PDF
+    if (payment.nextServiceDate) {
+      yPos += 12;
+      doc.setFillColor(254, 245, 231);
+      doc.roundedRect(20, yPos, 170, 9, 2, 2, 'F');
+      doc.setTextColor(211, 84, 0);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      const nextMileageTxt = payment.nextServiceMileage ? ` | Target: ${Number(payment.nextServiceMileage).toLocaleString()} km` : '';
+      doc.text(`Recommended Next Service Date: ${payment.nextServiceDate}${nextMileageTxt}`, 24, yPos + 6);
+      yPos += 4;
+    }
+
     // Notes
     yPos += 20;
     doc.setTextColor(120, 120, 120);
@@ -163,6 +176,14 @@ async function generateInvoice(req, res) {
     // Generate PDF buffer and send
     const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
     const filename = `invoice-${String(invoiceNumber).replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`;
+
+    if (req.query.format === 'base64') {
+      return res.status(200).json({
+        success: true,
+        filename,
+        base64: pdfBuffer.toString('base64')
+      });
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

@@ -191,4 +191,11 @@ export function getInvoiceDownloadUrl(paymentId) {
   return `${API_BASE_URL}/payments/${paymentId}/invoice`;
 }
 
+export async function getInvoiceBase64(paymentId, token) {
+  const { data } = await client.get(`/payments/${paymentId}/invoice?format=base64`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return data;
+}
+
 export { API_BASE_URL };

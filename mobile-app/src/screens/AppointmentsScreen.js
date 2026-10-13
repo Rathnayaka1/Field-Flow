@@ -10,10 +10,10 @@ import {
   Text,
   View
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useAuth } from '../context/AuthContext';
-import { getMyAppointments, getPaymentByAppointment, getInvoiceDownloadUrl } from '../services/api';
+import { getMyAppointments, getPaymentByAppointment, getInvoiceBase64 } from '../services/api';
 
 export default function AppointmentsScreen({ navigation }) {
   const { token } = useAuth();
@@ -31,27 +31,31 @@ export default function AppointmentsScreen({ navigation }) {
         return;
       }
       const paymentId = payment.id || payment._id;
-      const url = getInvoiceDownloadUrl(paymentId);
-      const filename = `invoice-${confirmationCode}.pdf`;
-      const fileUri = FileSystem.documentDirectory + filename;
+      const { base64, filename } = await getInvoiceBase64(paymentId, token);
+      if (!base64) {
+        throw new Error('Invoice data could not be generated.');
+      }
 
-      const result = await FileSystem.downloadAsync(url, fileUri, {
-        headers: { Authorization: `Bearer ${token}` }
+      const safeFilename = filename || `invoice-${confirmationCode}.pdf`;
+      const fileUri = `${FileSystem.documentDirectory}${safeFilename}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: 'base64'
       });
 
-      if (result.status === 200) {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(result.uri, { mimeType: 'application/pdf', dialogTitle: 'Invoice PDF' });
-        } else {
-          Alert.alert('Downloaded', `Invoice saved to ${filename}`);
-        }
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Invoice PDF',
+          UTI: 'com.adobe.pdf'
+        });
       } else {
-        Alert.alert('Error', 'Failed to download invoice.');
+        Alert.alert('Downloaded', `Invoice saved to ${safeFilename}`);
       }
     } catch (error) {
       console.error('Invoice download error:', error);
-      Alert.alert('Error', 'Could not download invoice. Payment may not exist yet.');
+      Alert.alert('Download Error', error.message || 'Could not download invoice.');
     } finally {
       setDownloadingInvoice(null);
     }
