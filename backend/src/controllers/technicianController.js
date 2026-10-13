@@ -101,8 +101,26 @@ async function deleteTechnician(req, res) {
   }
 }
 
+async function getAvailableTechnicians(req, res) {
+  try {
+    const { centerId, serviceCenterId } = req.query || {};
+    const targetCenterId = centerId || serviceCenterId;
+
+    let query = { status: 'active' };
+    if (targetCenterId) {
+      query.$or = [{ serviceCenter: targetCenterId }, { serviceCenter: null }];
+    }
+
+    const technicians = await Technician.find(query).populate('serviceCenter', 'name address');
+    return res.status(200).json({ technicians: technicians.map(serializeTechnician) });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = {
   listTechnicians,
+  getAvailableTechnicians,
   createTechnician,
   updateTechnician,
   deleteTechnician

@@ -374,13 +374,12 @@ export default function BookScreen({ navigation }) {
         <Text style={styles.noDataText}>No service centers available</Text>
       )}
 
-      <Text style={styles.sectionTitle}>Choose Technician (AI Performance Matched)</Text>
+      <Text style={styles.sectionTitle}>Choose Technician</Text>
       {technicians.length > 0 ? (
         <View style={styles.centerList}>
           {technicians.map((tech) => {
             const techId = tech.id || tech._id;
             const selected = techId === bookingForm.technicianId;
-            const isTop = tech.predictedLevel === 'Excellent' || (tech.averageRating && tech.averageRating >= 4.7);
 
             return (
               <Pressable
@@ -391,7 +390,7 @@ export default function BookScreen({ navigation }) {
                 <View style={styles.centerHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.centerName, selected && styles.centerNameActive]}>
-                      {tech.name} {isTop ? '🏆' : ''}
+                      {tech.name}
                     </Text>
                     <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
                       {tech.specialization || 'Service Technician'}
@@ -403,11 +402,6 @@ export default function BookScreen({ navigation }) {
                   <Text style={{ fontSize: 12, color: '#059669', fontWeight: '600' }}>
                     ⭐ {tech.averageRating ? Number(tech.averageRating).toFixed(1) : '4.5'} ({tech.totalJobs || 0} jobs)
                   </Text>
-                  <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '600' }}>
-                      {tech.predictedLevel || 'Top Performer'}
-                    </Text>
-                  </View>
                 </View>
               </Pressable>
             );
@@ -415,7 +409,7 @@ export default function BookScreen({ navigation }) {
         </View>
       ) : (
         <Text style={{ fontSize: 13, color: '#6B7280', fontStyle: 'italic', marginBottom: 16 }}>
-          Auto-assigned to top available technician
+          Auto-assigned to available technician
         </Text>
       )}
 

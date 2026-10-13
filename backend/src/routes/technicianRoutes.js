@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   listTechnicians,
+  getAvailableTechnicians,
   createTechnician,
   updateTechnician,
   deleteTechnician
@@ -8,6 +9,9 @@ const {
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+// Allow public/app fetching of available technicians for appointment booking
+router.get('/available', getAvailableTechnicians);
 
 // Allow admin, supervisor, and receptionist to view technicians
 router.get('/', authenticate, requireRole('admin', 'supervisor', 'receptionist'), listTechnicians);
