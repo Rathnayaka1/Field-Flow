@@ -193,50 +193,52 @@ export default function DashboardScreen({ navigation }) {
         </View>
       )}
 
-      {serviceReminder?.nextServiceDate ? (
-        <View style={styles.promoCard}>
-          <View style={styles.badgeRow}>
-            <Text style={styles.promoBadge}>🔧 Maintenance Reminder</Text>
-            {serviceReminder.serviceName ? (
-              <Text style={styles.promoSubBadge}>{serviceReminder.serviceName}</Text>
-            ) : null}
-          </View>
-          <Text style={styles.promoTitle}>Next Service Due Soon</Text>
-          <View style={styles.detailsRow}>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Recommended Date</Text>
-              <Text style={styles.detailValue}>📅 {serviceReminder.nextServiceDate}</Text>
+      {!activeAppointment && (
+        serviceReminder?.nextServiceDate ? (
+          <View style={styles.promoCard}>
+            <View style={styles.badgeRow}>
+              <Text style={styles.promoBadge}>🔧 Maintenance Reminder</Text>
+              {serviceReminder.serviceName ? (
+                <Text style={styles.promoSubBadge}>{serviceReminder.serviceName}</Text>
+              ) : null}
             </View>
-            {serviceReminder.nextServiceMileage > 0 && (
+            <Text style={styles.promoTitle}>Next Service Due Soon</Text>
+            <View style={styles.detailsRow}>
               <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Target Mileage</Text>
-                <Text style={styles.detailValue}>
-                  🛣️ {Number(serviceReminder.nextServiceMileage).toLocaleString()} km
-                </Text>
+                <Text style={styles.detailLabel}>Recommended Date</Text>
+                <Text style={styles.detailValue}>📅 {serviceReminder.nextServiceDate}</Text>
               </View>
-            )}
+              {serviceReminder.nextServiceMileage > 0 && (
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Target Mileage</Text>
+                  <Text style={styles.detailValue}>
+                    🛣️ {Number(serviceReminder.nextServiceMileage).toLocaleString()} km
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Pressable
+              style={styles.cardActionButton}
+              onPress={() => navigation.navigate('Book')}
+            >
+              <Text style={styles.cardActionButtonText}>Book Service Appointment</Text>
+            </Pressable>
           </View>
-          <Pressable
-            style={styles.cardActionButton}
-            onPress={() => navigation.navigate('Book')}
-          >
-            <Text style={styles.cardActionButtonText}>Book Service Appointment</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.promoCard}>
-          <Text style={styles.promoBadge}>🚗 Welcome</Text>
-          <Text style={styles.promoTitle}>Smart Vehicle Care</Text>
-          <Text style={styles.promoText}>
-            Keep your vehicle in top condition. Book your periodic service to activate automated maintenance tracking & reminders.
-          </Text>
-          <Pressable
-            style={styles.cardActionButton}
-            onPress={() => navigation.navigate('Book')}
-          >
-            <Text style={styles.cardActionButtonText}>Book First Service</Text>
-          </Pressable>
-        </View>
+        ) : (
+          <View style={styles.promoCard}>
+            <Text style={styles.promoBadge}>🚗 Welcome</Text>
+            <Text style={styles.promoTitle}>Smart Vehicle Care</Text>
+            <Text style={styles.promoText}>
+              Keep your vehicle in top condition. Book your periodic service to activate automated maintenance tracking & reminders.
+            </Text>
+            <Pressable
+              style={styles.cardActionButton}
+              onPress={() => navigation.navigate('Book')}
+            >
+              <Text style={styles.cardActionButtonText}>Book First Service</Text>
+            </Pressable>
+          </View>
+        )
       )}
 
       <Pressable
