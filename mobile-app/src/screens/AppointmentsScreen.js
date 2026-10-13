@@ -27,7 +27,10 @@ export default function AppointmentsScreen({ navigation }) {
     try {
       const payment = await getPaymentByAppointment(confirmationCode, token);
       if (!payment) {
-        Alert.alert('No Invoice', 'No payment record found for this appointment.');
+        Alert.alert(
+          'Payment Pending',
+          'No completed payment record was found for this appointment. Please settle the bill at the cashier counter first.'
+        );
         return;
       }
       const paymentId = payment.id || payment._id;
@@ -257,15 +260,27 @@ export default function AppointmentsScreen({ navigation }) {
             )}
 
             {apt.status === 'completed' && (
-              <Pressable
-                style={styles.invoiceButton}
-                onPress={() => handleDownloadInvoice(apt.confirmationCode)}
-                disabled={downloadingInvoice === apt.confirmationCode}
-              >
-                <Text style={styles.invoiceButtonText}>
-                  {downloadingInvoice === apt.confirmationCode ? '⏳ Downloading...' : '📄 Download Invoice'}
-                </Text>
-              </Pressable>
+              apt.isPaid ? (
+                <Pressable
+                  style={styles.invoiceButton}
+                  onPress={() => handleDownloadInvoice(apt.confirmationCode)}
+                  disabled={downloadingInvoice === apt.confirmationCode}
+                >
+                  <Text style={styles.invoiceButtonText}>
+                    {downloadingInvoice === apt.confirmationCode ? '⏳ Downloading...' : '📄 Download Invoice'}
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={styles.paymentPendingContainer}>
+                  <View style={styles.paymentPendingHeader}>
+                    <Text style={styles.paymentPendingIcon}>💳</Text>
+                    <Text style={styles.paymentPendingTitle}>Payment Pending at Counter</Text>
+                  </View>
+                  <Text style={styles.paymentPendingText}>
+                    Vehicle service is completed. Please settle the bill at the cashier counter to download your official invoice.
+                  </Text>
+                </View>
+              )
             )}
           </View>
         );
@@ -540,5 +555,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700'
+  },
+  paymentPendingContainer: {
+    marginTop: 12,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FCD34D'
+  },
+  paymentPendingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4
+  },
+  paymentPendingIcon: {
+    fontSize: 16
+  },
+  paymentPendingTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#B45309'
+  },
+  paymentPendingText: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 17
   }
 });
