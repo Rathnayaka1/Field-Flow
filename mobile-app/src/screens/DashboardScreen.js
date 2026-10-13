@@ -12,25 +12,28 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { getActiveAppointment, getNearbyServiceCenters, getUnreadNotificationCount } from '../services/api';
+import { getActiveAppointment, getNearbyServiceCenters, getNextServiceReminder, getUnreadNotificationCount } from '../services/api';
 
 export default function DashboardScreen({ navigation }) {
   const { user, token, logout } = useAuth();
   const [activeAppointment, setActiveAppointment] = useState(null);
   const [nearestCenter, setNearestCenter] = useState(null);
+  const [serviceReminder, setServiceReminder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   async function loadDashboardData() {
     try {
-      const [appointment, centers] = await Promise.all([
+      const [appointment, centers, reminder] = await Promise.all([
         getActiveAppointment(token).catch(() => null),
-        getNearbyServiceCenters(6.9271, 79.8612, 10000).catch(() => [])
+        getNearbyServiceCenters(6.9271, 79.8612, 10000).catch(() => []),
+        getNextServiceReminder(token).catch(() => null)
       ]);
 
       setActiveAppointment(appointment);
       setNearestCenter(centers?.[0] || null);
+      setServiceReminder(reminder);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
     } finally {
@@ -190,11 +193,51 @@ export default function DashboardScreen({ navigation }) {
         </View>
       )}
 
-      <View style={styles.offerCard}>
-        <Text style={styles.offerBadge}>🎁 Limited Offer</Text>
-        <Text style={styles.offerTitle}>Get 15% Off on First Service</Text>
-        <Text style={styles.offerText}>Book your first appointment and enjoy exclusive discount</Text>
-      </View>
+      {serviceReminder?.nextServiceDate ? (
+        <View style={styles.promoCard}>
+          <View style={styles.badgeRow}>
+            <Text style={styles.promoBadge}>🔧 Maintenance Reminder</Text>
+            {serviceReminder.serviceName ? (
+              <Text style={styles.promoSubBadge}>{serviceReminder.serviceName}</Text>
+            ) : null}
+          </View>
+          <Text style={styles.promoTitle}>Next Service Due Soon</Text>
+          <View style={styles.detailsRow}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Recommended Date</Text>
+              <Text style={styles.detailValue}>📅 {serviceReminder.nextServiceDate}</Text>
+            </View>
+            {serviceReminder.nextServiceMileage > 0 && (
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>Target Mileage</Text>
+                <Text style={styles.detailValue}>
+                  🛣️ {Number(serviceReminder.nextServiceMileage).toLocaleString()} km
+                </Text>
+              </View>
+            )}
+          </View>
+          <Pressable
+            style={styles.cardActionButton}
+            onPress={() => navigation.navigate('Book')}
+          >
+            <Text style={styles.cardActionButtonText}>Book Service Appointment</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.promoCard}>
+          <Text style={styles.promoBadge}>🚗 Welcome</Text>
+          <Text style={styles.promoTitle}>Smart Vehicle Care</Text>
+          <Text style={styles.promoText}>
+            Keep your vehicle in top condition. Book your periodic service to activate automated maintenance tracking & reminders.
+          </Text>
+          <Pressable
+            style={styles.cardActionButton}
+            onPress={() => navigation.navigate('Book')}
+          >
+            <Text style={styles.cardActionButtonText}>Book First Service</Text>
+          </Pressable>
+        </View>
+      )}
 
       <Pressable
         style={styles.appointmentsButton}
@@ -418,7 +461,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700'
   },
-  offerCard: {
+  promoCard: {
     backgroundColor: '#003D82',
     borderRadius: 16,
     padding: 20,
@@ -429,26 +472,74 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4
   },
-  offerBadge: {
+  badgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  promoBadge: {
     fontSize: 12,
     color: '#FFF',
     fontWeight: '600',
-    marginBottom: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12
   },
-  offerTitle: {
-    fontSize: 20,
+  promoSubBadge: {
+    fontSize: 12,
+    color: '#93C5FD',
+    fontWeight: '500'
+  },
+  promoTitle: {
+    fontSize: 19,
     fontWeight: '700',
     color: '#fff',
     marginBottom: 6
   },
-  offerText: {
+  promoText: {
     fontSize: 14,
-    color: '#FFE5DC'
+    color: '#DBEAFE',
+    lineHeight: 20,
+    marginBottom: 14
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 6,
+    marginBottom: 14
+  },
+  detailItem: {
+    flex: 1
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: '#BFDBFE',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF'
+  },
+  cardActionButton: {
+    backgroundColor: '#FFA500',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+    marginTop: 2
+  },
+  cardActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700'
   },
   appointmentsButton: {
     backgroundColor: '#FFFFFF',

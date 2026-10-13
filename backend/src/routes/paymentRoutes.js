@@ -5,7 +5,8 @@ const {
   updatePayment,
   deletePayment,
   getDueServiceReminders,
-  checkAndSendServiceReminders
+  checkAndSendServiceReminders,
+  getCustomerNextReminder
 } = require('../controllers/paymentController');
 const { generateInvoice, getPaymentByAppointment } = require('../controllers/invoiceController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
@@ -20,6 +21,7 @@ router.patch('/:id', authenticate, requireRole('admin', 'manager', 'cashier'), u
 router.delete('/:id', authenticate, requireRole('admin', 'manager'), deletePayment);
 
 // Invoice & customer-facing routes
+router.get('/next-reminder', authenticate, getCustomerNextReminder);
 router.get('/by-appointment/:code', authenticate, getPaymentByAppointment);
 router.get('/:id/invoice', authenticate, generateInvoice);
 

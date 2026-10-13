@@ -302,11 +302,44 @@ async function deletePayment(req, res) {
   }
 }
 
+async function getCustomerNextReminder(req, res) {
+  try {
+    const customerId = req.user?.sub || req.user?._id || req.user?.id;
+    if (!customerId) {
+      return res.status(401).json({ error: 'Customer authentication required' });
+    }
+
+    const latestPayment = await Payment.findOne({
+      customerId,
+      status: 'completed',
+      nextServiceDate: { $exists: true, $ne: '' }
+    }).sort({ createdAt: -1 });
+
+    if (!latestPayment) {
+      return res.status(200).json({ reminder: null });
+    }
+
+    return res.status(200).json({
+      reminder: {
+        nextServiceDate: latestPayment.nextServiceDate,
+        nextServiceMileage: latestPayment.nextServiceMileage || 0,
+        serviceName: latestPayment.serviceName || 'Periodic Service',
+        invoiceId: latestPayment.invoiceId,
+        lastServiceDate: latestPayment.createdAt
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = {
   getPayments,
   createPayment,
   updatePayment,
   deletePayment,
   getDueServiceReminders,
-  checkAndSendServiceReminders
+  checkAndSendServiceReminders,
+  getCustomerNextReminder
 };
+

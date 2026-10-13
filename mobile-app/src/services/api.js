@@ -171,6 +171,14 @@ export async function markAllNotificationsAsRead(token) {
   return data;
 }
 
+// Service Reminder APIs
+export async function getNextServiceReminder(token) {
+  const { data } = await client.get('/payments/next-reminder', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return data.reminder;
+}
+
 // Invoice APIs
 export async function getPaymentByAppointment(appointmentCode, token) {
   const { data } = await client.get(`/payments/by-appointment/${encodeURIComponent(appointmentCode)}`, {
