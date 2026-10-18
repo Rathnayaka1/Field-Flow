@@ -12,7 +12,7 @@ async function login(req, res) {
   }
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() }).populate('serviceCenter', 'name');
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -22,16 +22,11 @@ async function login(req, res) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const serviceCenterId = user.serviceCenter ? (user.serviceCenter._id || user.serviceCenter).toString() : null;
-    const serviceCenterName = user.serviceCenter?.name || null;
-
     const payload = {
       sub: user.id,
       role: user.role,
       name: user.name,
-      email: user.email,
-      serviceCenter: serviceCenterId,
-      serviceCenterName
+      email: user.email
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET || 'dev-secret', {
@@ -44,9 +39,7 @@ async function login(req, res) {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
-        serviceCenter: serviceCenterId,
-        serviceCenterName
+        role: user.role
       }
     });
   } catch (error) {

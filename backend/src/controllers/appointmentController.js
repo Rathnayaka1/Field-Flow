@@ -182,8 +182,7 @@ async function createAppointmentHandler(req, res) {
 
 async function listAppointmentsHandler(req, res) {
   try {
-    const centerId = req.user?.serviceCenter || req.query.centerId;
-    const filter = centerId ? { serviceCenter: centerId } : {};
+    const filter = req.query.centerId ? { serviceCenter: req.query.centerId } : {};
     const appointments = await Appointment.find(filter)
       .populate('serviceCenter', 'name address')
       .sort({ queueNumber: 1 });

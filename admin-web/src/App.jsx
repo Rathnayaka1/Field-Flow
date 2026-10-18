@@ -535,35 +535,12 @@ export default function App() {
     <div className="dashboard">
       <header className="dashboard-header">
         <div>
-          <h1>🚗 {auth.user.serviceCenterName || 'Service Center Admin'}</h1>
-          <p className="muted">
-            {auth.user.serviceCenterName 
-              ? `Workspace scoped to ${auth.user.serviceCenterName} — inventory, queues & staff isolated`
-              : 'Manage services, inventory, appointments, technicians and payments'}
-          </p>
+          <h1>🚗 Service Center Admin</h1>
+          <p className="muted">Manage services, inventory, appointments, technicians and payments</p>
         </div>
         <div className="header-actions">
           <div className="user-info">
             <div className="user-badge">{auth.user.name}</div>
-            {auth.user.serviceCenterName && (
-              <div 
-                className="center-badge" 
-                style={{
-                  background: '#e0f2fe',
-                  color: '#0369a1',
-                  fontWeight: 600,
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  fontSize: '0.82rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  border: '1px solid #bae6fd'
-                }}
-              >
-                🏢 {auth.user.serviceCenterName}
-              </div>
-            )}
             <div className="role-badge" title={getRoleDescription(auth.user.role)}>
               {ROLE_LABELS[auth.user.role]}
             </div>

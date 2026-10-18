@@ -11,11 +11,7 @@ const stockSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Part number is required'],
       trim: true,
-    },
-    serviceCenter: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'ServiceCenter',
-      default: null,
+      unique: true,
     },
     quantity: {
       type: Number,
