@@ -10,10 +10,10 @@ import {
   Text,
   View
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useAuth } from '../context/AuthContext';
-import { getMyAppointments, getPaymentByAppointment, getInvoiceDownloadUrl } from '../services/api';
+import { getMyAppointments, getPaymentByAppointment, getInvoiceBase64 } from '../services/api';
 
 export default function AppointmentsScreen({ navigation }) {
   const { token } = useAuth();
@@ -27,31 +27,38 @@ export default function AppointmentsScreen({ navigation }) {
     try {
       const payment = await getPaymentByAppointment(confirmationCode, token);
       if (!payment) {
-        Alert.alert('No Invoice', 'No payment record found for this appointment.');
+        Alert.alert(
+          'Payment Pending',
+          'No completed payment record was found for this appointment. Please settle the bill at the cashier counter first.'
+        );
         return;
       }
       const paymentId = payment.id || payment._id;
-      const url = getInvoiceDownloadUrl(paymentId);
-      const filename = `invoice-${confirmationCode}.pdf`;
-      const fileUri = FileSystem.documentDirectory + filename;
+      const { base64, filename } = await getInvoiceBase64(paymentId, token);
+      if (!base64) {
+        throw new Error('Invoice data could not be generated.');
+      }
 
-      const result = await FileSystem.downloadAsync(url, fileUri, {
-        headers: { Authorization: `Bearer ${token}` }
+      const safeFilename = filename || `invoice-${confirmationCode}.pdf`;
+      const fileUri = `${FileSystem.documentDirectory}${safeFilename}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: 'base64'
       });
 
-      if (result.status === 200) {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(result.uri, { mimeType: 'application/pdf', dialogTitle: 'Invoice PDF' });
-        } else {
-          Alert.alert('Downloaded', `Invoice saved to ${filename}`);
-        }
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Invoice PDF',
+          UTI: 'com.adobe.pdf'
+        });
       } else {
-        Alert.alert('Error', 'Failed to download invoice.');
+        Alert.alert('Downloaded', `Invoice saved to ${safeFilename}`);
       }
     } catch (error) {
       console.error('Invoice download error:', error);
-      Alert.alert('Error', 'Could not download invoice. Payment may not exist yet.');
+      Alert.alert('Download Error', error.message || 'Could not download invoice.');
     } finally {
       setDownloadingInvoice(null);
     }
@@ -253,15 +260,27 @@ export default function AppointmentsScreen({ navigation }) {
             )}
 
             {apt.status === 'completed' && (
-              <Pressable
-                style={styles.invoiceButton}
-                onPress={() => handleDownloadInvoice(apt.confirmationCode)}
-                disabled={downloadingInvoice === apt.confirmationCode}
-              >
-                <Text style={styles.invoiceButtonText}>
-                  {downloadingInvoice === apt.confirmationCode ? '⏳ Downloading...' : '📄 Download Invoice'}
-                </Text>
-              </Pressable>
+              apt.isPaid ? (
+                <Pressable
+                  style={styles.invoiceButton}
+                  onPress={() => handleDownloadInvoice(apt.confirmationCode)}
+                  disabled={downloadingInvoice === apt.confirmationCode}
+                >
+                  <Text style={styles.invoiceButtonText}>
+                    {downloadingInvoice === apt.confirmationCode ? '⏳ Downloading...' : '📄 Download Invoice'}
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={styles.paymentPendingContainer}>
+                  <View style={styles.paymentPendingHeader}>
+                    <Text style={styles.paymentPendingIcon}>💳</Text>
+                    <Text style={styles.paymentPendingTitle}>Payment Pending at Counter</Text>
+                  </View>
+                  <Text style={styles.paymentPendingText}>
+                    Vehicle service is completed. Please settle the bill at the cashier counter to download your official invoice.
+                  </Text>
+                </View>
+              )
             )}
           </View>
         );
@@ -536,5 +555,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700'
+  },
+  paymentPendingContainer: {
+    marginTop: 12,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FCD34D'
+  },
+  paymentPendingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4
+  },
+  paymentPendingIcon: {
+    fontSize: 16
+  },
+  paymentPendingTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#B45309'
+  },
+  paymentPendingText: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 17
   }
 });

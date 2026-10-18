@@ -2,6 +2,7 @@ const Service = require('../models/Service');
 const Customer = require('../models/Customer');
 const Appointment = require('../models/Appointment');
 const Technician = require('../models/Technician');
+const Payment = require('../models/Payment');
 const { createNotification } = require('./notificationController');
 const { STATUS, QUEUE_STATUS } = require('../utils/constants');
 
@@ -185,7 +186,35 @@ async function listAppointmentsHandler(req, res) {
     const appointments = await Appointment.find(filter)
       .populate('serviceCenter', 'name address')
       .sort({ queueNumber: 1 });
-    return res.status(200).json({ appointments: appointments.map(serializeAppointment) });
+
+    const confirmationCodes = appointments
+      .map(a => (a.confirmationCode || '').trim().toUpperCase())
+      .filter(Boolean);
+    const appointmentIds = appointments.map(a => a._id.toString());
+    const lookupCodes = [...new Set([...confirmationCodes, ...appointmentIds])];
+
+    const completedPayments = await Payment.find({
+      appointmentId: { $in: lookupCodes },
+      status: 'completed'
+    })
+      .select('appointmentId')
+      .lean();
+
+    const paidCodesSet = new Set(
+      completedPayments
+        .map(p => (p.appointmentId || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+
+    const serializedAppointments = appointments.map(apt => {
+      const serialized = serializeAppointment(apt);
+      const codeUpper = (apt.confirmationCode || '').trim().toUpperCase();
+      const idStr = apt._id ? apt._id.toString().toUpperCase() : '';
+      serialized.isPaid = paidCodesSet.has(codeUpper) || paidCodesSet.has(idStr);
+      return serialized;
+    });
+
+    return res.status(200).json({ appointments: serializedAppointments });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -206,7 +235,35 @@ async function getCustomerAppointments(req, res) {
       .populate('serviceCenter', 'name address phone')
       .populate('service', 'name duration basePrice')
       .sort({ createdAt: -1 });
-    return res.status(200).json({ appointments: appointments.map(serializeAppointment) });
+
+    const confirmationCodes = appointments
+      .map(a => (a.confirmationCode || '').trim().toUpperCase())
+      .filter(Boolean);
+    const appointmentIds = appointments.map(a => a._id.toString());
+    const lookupCodes = [...new Set([...confirmationCodes, ...appointmentIds])];
+
+    const completedPayments = await Payment.find({
+      appointmentId: { $in: lookupCodes },
+      status: 'completed'
+    })
+      .select('appointmentId')
+      .lean();
+
+    const paidCodesSet = new Set(
+      completedPayments
+        .map(p => (p.appointmentId || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+
+    const serializedAppointments = appointments.map(apt => {
+      const serialized = serializeAppointment(apt);
+      const codeUpper = (apt.confirmationCode || '').trim().toUpperCase();
+      const idStr = apt._id ? apt._id.toString().toUpperCase() : '';
+      serialized.isPaid = paidCodesSet.has(codeUpper) || paidCodesSet.has(idStr);
+      return serialized;
+    });
+
+    return res.status(200).json({ appointments: serializedAppointments });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -365,7 +422,16 @@ async function lookupAppointmentHandler(req, res) {
       return res.status(404).json({ error: 'Appointment not found' });
     }
 
-    return res.status(200).json({ appointment: serializeAppointment(appointment) });
+    const serialized = serializeAppointment(appointment);
+    const completedPayment = await Payment.findOne({
+      appointmentId: { $in: [normalized, appointment._id.toString()] },
+      status: 'completed'
+    })
+      .select('_id')
+      .lean();
+    serialized.isPaid = !!completedPayment;
+
+    return res.status(200).json({ appointment: serialized });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

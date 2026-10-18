@@ -1,31 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { getLoyaltySummary, redeemLoyaltyPoints } from '../services/api';
+import { getLoyaltySummary } from '../services/api';
 
 export default function LoyaltyScreen() {
   const { token } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState({ loyaltyPoints: 0, transactions: [] });
-  const [usePointsInput, setUsePointsInput] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const loadSummary = async () => {
     if (!token) return;
     try {
       setLoading(true);
       const data = await getLoyaltySummary(token);
-      // සර්වර් එකෙන් එන දත්ත structure එක කුමක් වුවත්, ඇප් එක ක්‍රෑෂ් වීම වැළැක්වීමට මෙලෙස ආරක්ෂිතව ලබා ගනී
       setSummary(data?.data || data || { loyaltyPoints: 0, transactions: [] });
     } catch (err) {
       setError(err.message || 'Failed to load loyalty points');
@@ -38,28 +32,6 @@ export default function LoyaltyScreen() {
     loadSummary();
   }, [token]);
 
-  const handleUsePoints = async () => {
-    const points = Number(usePointsInput);
-    if (!Number.isFinite(points) || points <= 0) {
-      setError('Enter a valid positive number of points to use.');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      setError('');
-      setSuccess('');
-      const data = await redeemLoyaltyPoints(points, token, 'Redeemed from mobile app');
-      setSummary(data?.data || data || { loyaltyPoints: 0, transactions: [] });
-      setUsePointsInput('');
-      setSuccess('Points redeemed successfully.');
-    } catch (err) {
-      setError(err.message || 'Unable to redeem points');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -68,40 +40,61 @@ export default function LoyaltyScreen() {
     );
   }
 
+  const currentPoints = Math.max(0, Number(summary?.loyaltyPoints || 0));
+  const hasReward = currentPoints >= 10;
+  const pointsNeeded = Math.max(0, 10 - currentPoints);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.pointsCard}>
         <Text style={styles.pointsLabel}>Available Loyalty Points</Text>
-        <Text style={styles.pointsValue}>{summary?.loyaltyPoints ?? 0}</Text>
+        <Text style={styles.pointsValue}>{currentPoints}</Text>
+        <View style={[styles.badgeContainer, hasReward ? styles.badgeSuccess : styles.badgePending]}>
+          <Text style={[styles.badgeText, hasReward ? styles.badgeTextSuccess : styles.badgeTextPending]}>
+            {hasReward
+              ? '🎉 Eligible for Rs. 500 Discount!'
+              : `⏳ ${pointsNeeded} more points to unlock Rs. 500 discount`}
+          </Text>
+        </View>
         <Text style={styles.pointsHint}>
-          Points are added automatically after successful service completion.
+          Points are added automatically after every completed service.
         </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Use Points</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          value={usePointsInput}
-          onChangeText={setUsePointsInput}
-          placeholder="Enter points to use"
-          placeholderTextColor="#9CA3AF"
-        />
-        <Pressable style={styles.secondaryButton} onPress={handleUsePoints} disabled={submitting}>
-          <Text style={styles.secondaryButtonText}>{submitting ? 'Processing...' : 'Redeem Points'}</Text>
-        </Pressable>
+        <Text style={styles.sectionTitle}>🎁 How Loyalty Rewards Work</Text>
+        
+        <View style={styles.ruleItem}>
+          <View style={styles.ruleIconCircle}>
+            <Text style={styles.ruleIcon}>🪙</Text>
+          </View>
+          <View style={styles.ruleContent}>
+            <Text style={styles.ruleTitle}>Earn with Every Service</Text>
+            <Text style={styles.ruleDesc}>Get 1 Loyalty Point for every Rs. 1,000 spent on completed vehicle maintenance.</Text>
+          </View>
+        </View>
+
+        <View style={styles.ruleDivider} />
+
+        <View style={styles.ruleItem}>
+          <View style={styles.ruleIconCircle}>
+            <Text style={styles.ruleIcon}>🏷️</Text>
+          </View>
+          <View style={styles.ruleContent}>
+            <Text style={styles.ruleTitle}>Redeem for Bill Discounts</Text>
+            <Text style={styles.ruleDesc}>Collect 10 points to unlock a Rs. 500 discount. The cashier will apply it directly to your bill during payment.</Text>
+          </View>
+        </View>
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {success ? <Text style={styles.success}>{success}</Text> : null}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Recent Transactions</Text>
         {summary?.transactions?.length ? (
           summary.transactions.map((tx, index) => (
             <View key={`${tx?.createdAt || index}-${tx?.points || 0}-${tx?.type || 'tx'}`} style={styles.txRow}>
-              <View>
+              <View style={{ flex: 1, paddingRight: 8 }}>
                 <Text style={styles.txType}>{tx?.type === 'earn' ? 'Added Points' : 'Redeemed Points'}</Text>
                 <Text style={styles.txNote}>{tx?.note || 'No note'}</Text>
               </View>
@@ -130,7 +123,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    gap: 12,
+    gap: 14,
     paddingBottom: 32
   },
   loadingContainer: {
@@ -142,69 +135,108 @@ const styles = StyleSheet.create({
   pointsCard: {
     backgroundColor: '#003D82',
     borderRadius: 16,
-    padding: 20,
-    alignItems: 'center'
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#003D82',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4
   },
   pointsLabel: {
     color: '#BFDBFE',
     fontSize: 14,
-    marginBottom: 6
+    marginBottom: 6,
+    fontWeight: '500'
   },
   pointsValue: {
     color: '#FFFFFF',
-    fontSize: 38,
-    fontWeight: '700'
+    fontSize: 42,
+    fontWeight: '800'
+  },
+  badgeContainer: {
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20
+  },
+  badgeSuccess: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)'
+  },
+  badgePending: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)'
+  },
+  badgeText: {
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  badgeTextSuccess: {
+    color: '#86EFAC'
+  },
+  badgeTextPending: {
+    color: '#E0E7FF'
   },
   pointsHint: {
-    color: '#BFDBFE',
+    color: '#93C5FD',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 10,
     fontSize: 12
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-    gap: 10
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2
   },
   sectionTitle: {
     color: '#1F2937',
     fontSize: 16,
-    fontWeight: '700'
+    fontWeight: '700',
+    marginBottom: 12
   },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#1F2937',
-    backgroundColor: '#FFFFFF'
+  ruleItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12
   },
-  secondaryButton: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#003D82',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 12,
+  ruleIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
     alignItems: 'center'
   },
-  secondaryButtonText: {
-    color: '#003D82',
-    fontWeight: '700'
+  ruleIcon: {
+    fontSize: 18
+  },
+  ruleContent: {
+    flex: 1
+  },
+  ruleTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2
+  },
+  ruleDesc: {
+    fontSize: 12.5,
+    color: '#64748B',
+    lineHeight: 18
+  },
+  ruleDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12
   },
   error: {
     color: '#DC2626',
-    fontWeight: '600'
-  },
-  success: {
-    color: '#16A34A',
-    fontWeight: '600'
+    fontWeight: '600',
+    textAlign: 'center'
   },
   txRow: {
     flexDirection: 'row',
@@ -212,14 +244,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    paddingVertical: 10
+    paddingVertical: 12
   },
   txType: {
     color: '#111827',
-    fontWeight: '600'
+    fontWeight: '600',
+    fontSize: 14
   },
   txNote: {
-    color: '#6B7280',
+    color: '#64748B',
     fontSize: 12,
     marginTop: 2
   },
@@ -238,11 +271,12 @@ const styles = StyleSheet.create({
   },
   txDate: {
     color: '#94A3B8',
-    fontSize: 12
+    fontSize: 12,
+    marginTop: 2
   },
   emptyText: {
     color: '#94A3B8',
     textAlign: 'center',
-    paddingVertical: 8
+    paddingVertical: 12
   }
 });
