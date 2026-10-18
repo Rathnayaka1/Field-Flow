@@ -101,9 +101,11 @@ async function deleteTechnician(req, res) {
   }
 }
 
+const { predictTechnicianPerformance } = require('../services/aiPerformanceService');
+
 async function getAvailableTechnicians(req, res) {
   try {
-    const { centerId, serviceCenterId } = req.query || {};
+    const { centerId, serviceCenterId, vehicleType, serviceType } = req.query || {};
     const targetCenterId = centerId || serviceCenterId;
 
     let query = { status: 'active' };
@@ -112,7 +114,30 @@ async function getAvailableTechnicians(req, res) {
     }
 
     const technicians = await Technician.find(query).populate('serviceCenter', 'name address');
-    return res.status(200).json({ technicians: technicians.map(serializeTechnician) });
+    const serialized = technicians.map(serializeTechnician);
+
+    // Apply AI Performance model predictions
+    const enriched = await predictTechnicianPerformance(
+      serialized,
+      vehicleType || 'Car',
+      serviceType || 'Interior'
+    );
+
+    return res.status(200).json({ technicians: enriched });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+async function predictTechniciansEndpoint(req, res) {
+  try {
+    const { technicians, vehicleType, serviceType } = req.body || {};
+    const predictions = await predictTechnicianPerformance(
+      technicians || [],
+      vehicleType || 'Car',
+      serviceType || 'Interior'
+    );
+    return res.status(200).json({ technicians: predictions });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -123,5 +148,6 @@ module.exports = {
   getAvailableTechnicians,
   createTechnician,
   updateTechnician,
-  deleteTechnician
+  deleteTechnician,
+  predictTechniciansEndpoint
 };

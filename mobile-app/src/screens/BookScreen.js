@@ -27,6 +27,7 @@ const initialBooking = {
   customerName: '',
   customerEmail: '',
   customerPhone: '',
+  vehicleType: 'Car',
   serviceId: '',
   serviceCenterId: '',
   technicianId: '',
@@ -47,6 +48,7 @@ export default function BookScreen({ navigation }) {
   const [bookingResult, setBookingResult] = useState(null);
   const [bookingError, setBookingError] = useState('');
   const [loadingServices, setLoadingServices] = useState(true);
+  const [loadingTechnicians, setLoadingTechnicians] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -96,32 +98,62 @@ export default function BookScreen({ navigation }) {
     }, [loadData])
   );
 
+  const selectedService = useMemo(
+    () => services.find((svc) => (svc.id || svc._id) === bookingForm.serviceId),
+    [services, bookingForm.serviceId]
+  );
+
+  const normalizedServiceType = useMemo(() => {
+    if (!selectedService?.name) return 'Interior';
+    const name = selectedService.name.toLowerCase();
+    if (name.includes('interior')) return 'Interior';
+    if (name.includes('full')) return 'Full Body';
+    if (name.includes('wash') || name.includes('body')) return 'Body Wash';
+    return 'Interior';
+  }, [selectedService]);
+
   useEffect(() => {
     const centerId = bookingForm.serviceCenterId;
     if (!centerId) return;
 
+    let isMounted = true;
     async function loadTechnicians() {
+      setLoadingTechnicians(true);
       try {
-        const techList = await getAvailableTechnicians(centerId, token).catch(() => []);
-        setTechnicians(techList);
-        if (techList.length > 0) {
-          setBookingForm((prev) => ({
-            ...prev,
-            technicianId: prev.technicianId || techList[0]?.id || techList[0]?._id || ''
-          }));
+        const vType = bookingForm.vehicleType || 'Car';
+        const techList = await getAvailableTechnicians(centerId, token, vType, normalizedServiceType).catch(() => []);
+        if (isMounted) {
+          // Sort technicians: Top recommendation first, then HIGH > MEDIUM > LOW
+          const sorted = [...techList].sort((a, b) => {
+            if (a.aiPrediction?.isTopRecommendation && !b.aiPrediction?.isTopRecommendation) return -1;
+            if (!a.aiPrediction?.isTopRecommendation && b.aiPrediction?.isTopRecommendation) return 1;
+            const levelScore = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+            const scoreA = levelScore[a.aiPrediction?.level] || 2;
+            const scoreB = levelScore[b.aiPrediction?.level] || 2;
+            return scoreB - scoreA;
+          });
+
+          setTechnicians(sorted);
+          if (sorted.length > 0) {
+            setBookingForm((prev) => {
+              const exists = sorted.some((t) => (t.id || t._id) === prev.technicianId);
+              return {
+                ...prev,
+                technicianId: exists ? prev.technicianId : (sorted[0]?.id || sorted[0]?._id || '')
+              };
+            });
+          }
         }
       } catch (e) {
         console.warn('Failed to load technicians:', e);
+      } finally {
+        if (isMounted) setLoadingTechnicians(false);
       }
     }
 
     loadTechnicians();
-  }, [bookingForm.serviceCenterId, token]);
-
-  const selectedService = useMemo(
-    () => services.find((svc) => svc.id === bookingForm.serviceId),
-    [services, bookingForm.serviceId]
-  );
+    return () => { isMounted = false; };
+  }, [bookingForm.serviceCenterId, bookingForm.vehicleType, normalizedServiceType, token]);
 
   const handleFormChange = (field, value) => {
     setBookingForm((prev) => ({ ...prev, [field]: value }));
@@ -341,6 +373,30 @@ export default function BookScreen({ navigation }) {
         </View>
       )}
 
+      {/* Vehicle Type Selection */}
+      <Text style={styles.sectionTitle}>Choose Vehicle Type</Text>
+      <View style={styles.vehicleTypeRow}>
+        {[
+          { type: 'Car', icon: '🚗', label: 'Car / Sedan' },
+          { type: 'Van', icon: '🚐', label: 'Van / MPV' },
+          { type: 'Cab', icon: '🚖', label: 'Cab / SUV' }
+        ].map((item) => {
+          const selected = (bookingForm.vehicleType || 'Car') === item.type;
+          return (
+            <Pressable
+              key={item.type}
+              style={[styles.vehicleTypeChip, selected && styles.vehicleTypeChipActive]}
+              onPress={() => handleFormChange('vehicleType', item.type)}
+            >
+              <Text style={styles.vehicleTypeIcon}>{item.icon}</Text>
+              <Text style={[styles.vehicleTypeLabel, selected && styles.vehicleTypeLabelActive]}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <Text style={styles.sectionTitle}>Choose service center</Text>
       {serviceCenters.length > 0 ? (
         <View style={styles.centerList}>
@@ -374,33 +430,108 @@ export default function BookScreen({ navigation }) {
         <Text style={styles.noDataText}>No service centers available</Text>
       )}
 
-      <Text style={styles.sectionTitle}>Choose Technician</Text>
-      {technicians.length > 0 ? (
+      {/* Technician Selection with AI Performance Badges */}
+      <View style={styles.techSectionHeader}>
+        <Text style={styles.sectionTitle}>Choose Technician</Text>
+        <View style={styles.aiHeaderTag}>
+          <Text style={styles.aiHeaderTagText}>🤖 AI Analyzed</Text>
+        </View>
+      </View>
+      <Text style={styles.techSectionSub}>
+        Model evaluates experience, ratings, and vehicle compatibility for your {bookingForm.vehicleType || 'Car'}:
+      </Text>
+
+      {loadingTechnicians ? (
+        <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+          <ActivityIndicator color="#003D82" size="small" />
+          <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 6 }}>Calculating AI performance match…</Text>
+        </View>
+      ) : technicians.length > 0 ? (
         <View style={styles.centerList}>
           {technicians.map((tech) => {
             const techId = tech.id || tech._id;
             const selected = techId === bookingForm.technicianId;
+            const ai = tech.aiPrediction || {};
+            const isHigh = ai.level === 'HIGH';
+            const isMedium = ai.level === 'MEDIUM';
+            const isLow = ai.level === 'LOW';
+            const isTop = Boolean(ai.isTopRecommendation);
 
             return (
               <Pressable
                 key={techId}
-                style={[styles.centerCard, selected && styles.centerCardActive]}
+                style={[
+                  styles.centerCard,
+                  selected && styles.centerCardActive,
+                  isTop && styles.topTechCard
+                ]}
                 onPress={() => handleFormChange('technicianId', techId)}
               >
+                {isTop && (
+                  <View style={styles.topBadgeContainer}>
+                    <Text style={styles.topBadgeText}>⭐ AI TOP RECOMMENDATION</Text>
+                  </View>
+                )}
+
                 <View style={styles.centerHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.centerName, selected && styles.centerNameActive]}>
-                      {tech.name}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={[styles.centerName, selected && styles.centerNameActive]}>
+                        {tech.name}
+                      </Text>
+
+                      {/* AI Performance Badges */}
+                      {isHigh && (
+                        <View style={styles.aiBadgeHigh}>
+                          <Text style={styles.aiBadgeHighText}>⚡ HIGH Performance</Text>
+                        </View>
+                      )}
+                      {isMedium && (
+                        <View style={styles.aiBadgeMedium}>
+                          <Text style={styles.aiBadgeMediumText}>⚡ MEDIUM Match</Text>
+                        </View>
+                      )}
+                      {isLow && (
+                        <View style={styles.aiBadgeLow}>
+                          <Text style={styles.aiBadgeLowText}>⚡ STANDARD Match</Text>
+                        </View>
+                      )}
+                    </View>
+
                     <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
                       {tech.specialization || 'Service Technician'}
                     </Text>
                   </View>
                   {selected && <Text style={styles.selectedBadge}>✓ Selected</Text>}
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 10 }}>
-                  <Text style={{ fontSize: 12, color: '#059669', fontWeight: '600' }}>
-                    ⭐ {tech.averageRating ? Number(tech.averageRating).toFixed(1) : '4.5'} ({tech.totalJobs || 0} jobs)
+
+                {/* Technician Stats */}
+                <View style={styles.techMetricsRow}>
+                  <Text style={styles.metricItem}>
+                    ⭐ {tech.averageRating ? Number(tech.averageRating).toFixed(1) : '4.5'}
+                  </Text>
+                  <Text style={styles.metricDot}>•</Text>
+                  <Text style={styles.metricItem}>
+                    🛠️ {tech.experienceYears || 0} yrs exp
+                  </Text>
+                  <Text style={styles.metricDot}>•</Text>
+                  <Text style={styles.metricItem}>
+                    📋 {tech.totalJobs || 0} jobs
+                  </Text>
+                  <Text style={styles.metricDot}>•</Text>
+                  <Text style={styles.metricSuccess}>
+                    🎯 {tech.successRate || 100}%
+                  </Text>
+                </View>
+
+                {/* AI Insight Snippet */}
+                <View style={[styles.aiInsightBox, isHigh ? styles.aiInsightBoxHigh : styles.aiInsightBoxNormal]}>
+                  <Text style={[styles.aiInsightText, isHigh ? styles.aiInsightTextHigh : styles.aiInsightTextNormal]}>
+                    {isHigh
+                      ? `High turnaround efficiency predicted for ${bookingForm.vehicleType || 'Car'} ${normalizedServiceType}`
+                      : isMedium
+                      ? `Reliable service match for ${bookingForm.vehicleType || 'Car'}`
+                      : `Standard performance baseline`}
                   </Text>
                 </View>
               </Pressable>
@@ -610,6 +741,167 @@ const styles = StyleSheet.create({
   serviceMeta: {
     color: '#9CA3AF',
     fontSize: 14
+  },
+  vehicleTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 6
+  },
+  vehicleTypeChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    gap: 4
+  },
+  vehicleTypeChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#003D82'
+  },
+  vehicleTypeIcon: {
+    fontSize: 15
+  },
+  vehicleTypeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4B5563'
+  },
+  vehicleTypeLabelActive: {
+    color: '#003D82',
+    fontWeight: '700'
+  },
+  techSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8
+  },
+  aiHeaderTag: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#BAE6FD'
+  },
+  aiHeaderTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7'
+  },
+  techSectionSub: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 6
+  },
+  topTechCard: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFDF5'
+  },
+  topBadgeContainer: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 8
+  },
+  topBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  aiBadgeHigh: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#86EFAC'
+  },
+  aiBadgeHighText: {
+    color: '#15803D',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  aiBadgeMedium: {
+    backgroundColor: '#FEF9C3',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE047'
+  },
+  aiBadgeMediumText: {
+    color: '#854D0E',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  aiBadgeLow: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB'
+  },
+  aiBadgeLowText: {
+    color: '#4B5563',
+    fontSize: 11,
+    fontWeight: '600'
+  },
+  techMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6
+  },
+  metricItem: {
+    fontSize: 12,
+    color: '#4B5563',
+    fontWeight: '500'
+  },
+  metricDot: {
+    fontSize: 12,
+    color: '#9CA3AF'
+  },
+  metricSuccess: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '700'
+  },
+  aiInsightBox: {
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderLeftWidth: 3
+  },
+  aiInsightBoxHigh: {
+    backgroundColor: '#F0FDF4',
+    borderLeftColor: '#16A34A'
+  },
+  aiInsightBoxNormal: {
+    backgroundColor: '#F8FAFC',
+    borderLeftColor: '#94A3B8'
+  },
+  aiInsightText: {
+    fontSize: 11,
+    fontWeight: '500'
+  },
+  aiInsightTextHigh: {
+    color: '#166534'
+  },
+  aiInsightTextNormal: {
+    color: '#475569'
   },
   centerList: {
     gap: 12,

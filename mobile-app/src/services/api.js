@@ -69,9 +69,9 @@ export async function getServiceCenters() {
 }
 
 // Technicians APIs
-export async function getAvailableTechnicians(centerId, token) {
+export async function getAvailableTechnicians(centerId, token, vehicleType = 'Car', serviceType = 'Interior') {
   const { data } = await client.get('/technicians/available', {
-    params: { centerId },
+    params: { centerId, vehicleType, serviceType },
     headers: token ? { Authorization: `Bearer ${token}` } : {}
   });
   return data.technicians || [];
