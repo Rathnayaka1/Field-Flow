@@ -651,6 +651,7 @@ export default function App() {
         {activeTab === 'technicians' && (
           <ProtectedFeature userRole={auth.user.role} feature="technicians">
             <TechnicianManager
+              token={token}
               technicians={technicians}
               onCreate={handleTechnicianCreate}
               onUpdate={handleTechnicianUpdate}
